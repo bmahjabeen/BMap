@@ -8,38 +8,38 @@
 #include <fcntl.h>
 #include <string>
 #include <cstring>
+#include <Constants.h>
 
 using namespace std;
+
+static void logError(string msg)
+{
+    cerr << "Error: " << msg <<endl;
+}
+
+static void log(string msg)
+{
+    cout << msg <<endl;
+}
 
 class Client
 {
 private:
-    static void logError(string msg)
-    {
-        cerr << "Error: " << msg <<endl;
-    }
-
-    static void log(string msg)
-    {
-        cout << msg <<endl;
-    }
 
     int prepareClientSocket(string* server, int* port)
     {
         struct sockaddr_in clientSockAddr;
-        char* buffer = (char*)calloc(sizeof(char), 2048);
-        int buffer_len = 2048;
         int clientSock;
-        int optVal = 1;
+        int optionValue = 1;
 
         clientSock = socket(AF_INET, SOCK_STREAM, 0);
         if(clientSock == -1){
             logError("Could not create socket");
             return -1;
         }
-        if( (setsockopt(clientSock, SOL_SOCKET, SO_REUSEADDR, (char*)&optVal, sizeof(int)) == -1 )||
-            (setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&optVal, sizeof(int)) == -1 ) ){
-            logError("Setup socket");
+        if( (setsockopt(clientSock, SOL_SOCKET, SO_REUSEADDR, (char*)&optionValue, sizeof(int)) == -1 )||
+            (setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&optionValue, sizeof(int)) == -1 ) ){
+            logError("Could not setup socket");
             return -1;
         }
         clientSockAddr.sin_family = AF_INET ;
@@ -47,7 +47,7 @@ private:
         memset(&(clientSockAddr.sin_zero), 0, 8);
         clientSockAddr.sin_addr.s_addr = inet_addr(server->c_str());
         if(connect(clientSock, (struct sockaddr*)&clientSockAddr, sizeof(clientSockAddr)) == -1){
-            logError("connect socket");
+            logError("Could not connect to socket");
             return -1;
         }
         return clientSock;
@@ -55,12 +55,32 @@ private:
 
     void startListening(int clientSocket)
     {
-        char* response = (char*)calloc(sizeof(char),2048);
-        if(recv(clientSocket, response, 2048, 0) == -1){
-            logError("receiving response");
-        }
+        char* request = (char*)malloc(sizeof(char) * REQUEST_BUFFER_SZ);
+        char* response = (char*)malloc(sizeof(char) * RESPONSE_BUFFER_SZ);
 
-        cout << "Received response: " << response << endl;
+        while (true)
+        {
+            memset(request, 0, REQUEST_BUFFER_SZ);
+            fgets(request, REQUEST_BUFFER_SZ, stdin);
+            request[strlen(request) - 1] = '\0';
+            if (strlen(request) < 1) continue;
+
+            if(send(clientSocket, request, strlen(request), 0) == -1){
+                logError("sending request");
+                break;
+            }
+
+            memset(response, 0, RESPONSE_BUFFER_SZ);
+            if(recv(clientSocket, response, RESPONSE_BUFFER_SZ, 0) == -1){
+                logError("receiving response");
+                break;
+            }
+
+            log("Received response:");
+            log(response);
+        }
+        free(request);
+        free(response);
         close(clientSocket);
     }
 
@@ -111,16 +131,17 @@ int parseInput(int argc, char* argv[], string* server, int* port)
 
 int main(int argc, char* argv[])
 {
-    string server;
+    string serverIP;
     int port;
-    if (parseInput(argc, argv, &server, &port) < 0)
+    if (parseInput(argc, argv, &serverIP, &port) < 0)
     {
         showUsage(argv[0]);
+        logError("Invalid program argument");
         return -1;
     }
 
     Client client;
-    client.start(&server, &port);
+    client.start(&serverIP, &port);
     return 0;
 }
 
