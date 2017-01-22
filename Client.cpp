@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <string>
 #include <cstring>
-#include <Constants.h>
+#include "Common.h"
 
 using namespace std;
 
@@ -25,6 +25,19 @@ static void log(string msg)
 class Client
 {
 private:
+
+    enum UserType {
+        Admin,
+        Normal
+    };
+
+    UserType userType;
+    const static int normalUserPermLength = 4;
+    const static int adminUserPermLength = 10;
+    Command userInputToCommandForNormal[normalUserPermLength] = {Exit, PrintMap, GetTrip, FindPoi};
+    Command userInputToCommandForAdmin[adminUserPermLength] = {Exit, AddVertex, AddEdge, PrintMap, GetTrip, FindPoi, AddEdgeEvent,
+                                              Store, Retrieve, Reset};
+
 
     int prepareClientSocket(string* server, int* port)
     {
@@ -53,10 +66,58 @@ private:
         return clientSock;
     }
 
+    UserType processLogin()
+    {
+        string uname, pwd;
+
+        // TODO implement real server side encrypted authentication + authorization
+        while (true) {
+            cout << "Enter username: ";
+            cin >> uname;
+            cout << "Enter password: ";
+            cin >> pwd;
+            if (uname == "admin" && pwd == "admin") {
+                return UserType::Admin;
+            } else if (uname == "user" && pwd == "user") {
+                return UserType::Normal;
+            } else {
+                logError("Invalid username or password");
+            }
+        }
+    }
+
+    void printAvailableCommands() {
+        if (userType == Admin) {
+            printf("Available Commands: 1: Add Vertex, 2: Add Edge, 3: Print Map, 0: Exit\n");
+        } else if (userType == Normal) {
+            printf("Available Commands: 1: Print Map, 0: Exit\n");
+        }
+    }
+
+    Command getCommand(char* request)
+    {
+        int value = request[0] - '0';
+        if (value < 0 || (userType == Normal && value >= normalUserPermLength)
+                || (userType == Admin && value >= adminUserPermLength))
+        {
+            logError("Invalid command");
+            return Invalid;
+        }
+        if (userType == Admin) {
+            return userInputToCommandForAdmin[value];
+        }
+        else if (userType == Normal) {
+            return userInputToCommandForNormal[value];
+        }
+    }
+
     void startListening(int clientSocket)
     {
         char* request = (char*)malloc(sizeof(char) * REQUEST_BUFFER_SZ);
         char* response = (char*)malloc(sizeof(char) * RESPONSE_BUFFER_SZ);
+
+        userType = processLogin();
+        printAvailableCommands();
 
         while (true)
         {
@@ -64,6 +125,13 @@ private:
             fgets(request, REQUEST_BUFFER_SZ, stdin);
             request[strlen(request) - 1] = '\0';
             if (strlen(request) < 1) continue;
+
+            Command command = getCommand(request);
+            if (command == Invalid) {
+                printAvailableCommands();
+                continue;
+            }
+            request[0] = '0' + command;
 
             if(send(clientSocket, request, strlen(request), 0) == -1){
                 logError("sending request");
@@ -85,7 +153,6 @@ private:
     }
 
 public:
-    static const int MIN_PORT = 1;
 
     void start(string* server, int* port)
     {
@@ -114,13 +181,14 @@ int parseInput(int argc, char* argv[], string* server, int* port)
             throw invalid_argument("");
         }
         std::string::size_type sz;
-        *server = string(argv[1]);
+        string str = string(argv[1]);
         int number = stoi(argv[2], &sz);
-        if (server->size() < 1 || number < Client::MIN_PORT)
+        if (str.size() < 1 || number < MIN_PORT)
         {
             throw invalid_argument("");
         }
         *port = number;
+        *server = str;
     }
     catch (exception &e)
     {

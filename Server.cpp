@@ -10,7 +10,7 @@
 #include <string>
 #include <stdexcept>
 #include <sstream>
-#include <Constants.h>
+#include "Common.h"
 
 using namespace std;
 
@@ -27,10 +27,6 @@ void log(string msg)
 class Server
 {
 private:
-
-    enum Command {
-        END_SESSION
-    };
 
     int prepareServerSocket(int port)
     {
@@ -71,7 +67,7 @@ private:
         Command rv;
         if (command == 0)
         {
-            rv = END_SESSION;
+            rv = Exit;
         }
         return rv;
     }
@@ -99,7 +95,7 @@ private:
                 logError("Could not sending response");
                 break;
             }
-            if (command == Command::END_SESSION)
+            if (command == Command::Exit)
             {
                 break;
             }
@@ -133,8 +129,6 @@ private:
     }
 
 public:
-    static const int MIN_PORT = 1; // TODO find a better lower bound
-
     void start(int port)
     {
         int serverSocket = prepareServerSocket(port);
@@ -150,6 +144,7 @@ public:
 void showUsage(std::string name)
 {
     cerr << "Usage: " << name << " PORT_NUMBER" << endl;
+    cerr << "PORT_NUMBER has to be greater than " << MIN_PORT << endl;
 }
 
 int parseInput(int argc, char* argv[])
@@ -160,9 +155,9 @@ int parseInput(int argc, char* argv[])
         {
             throw invalid_argument("");
         }
-        std::string::size_type sz;
+        string::size_type sz;
         int port = stoi(argv[1], &sz);
-        if (port < Server::MIN_PORT)
+        if (port < MIN_PORT)
         {
             throw invalid_argument("");
         }
